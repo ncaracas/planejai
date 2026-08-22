@@ -1,7 +1,7 @@
 import { parseCurrency } from '@/utils/currency'
 import { calcMonthlySavings } from '@/utils/simulation'
 
-import type { SimulationRecord } from './simulation'
+import type { InsightConversation, SimulationRecord } from './simulation'
 
 const RESPONSE_SCHEMA = `{
   "feasibility": {
@@ -63,4 +63,33 @@ export function buildAIPrompt(simulation: SimulationRecord) {
       - "viable": saldo após reserva para a meta é maior ou igual a 0
       - "needs_adjustment": saldo negativo de até 20% do valor da economia mensal necessária
       - "unfeasible": saldo negativo superior a 20% do valor da economia mensal necessária`
+}
+
+export function buildAIQuestionPrompt(
+  simulation: SimulationRecord,
+  insight: SimulationRecord['insight'],
+  conversations: InsightConversation[],
+  question: string,
+) {
+  return `Você é um educador financeiro especializado em finanças pessoais e está continuando uma conversa sobre uma simulação já analisada.
+Responda diretamente à pergunta do usuário, em português do Brasil, com linguagem clara, didática, objetiva e encorajadora. Use segunda pessoa ("você"). Considere os dados da simulação e o insight original como contexto. Não invente dados, não dê garantias de rentabilidade e sinalize quando uma decisão exigir avaliação profissional.
+
+Dados da simulação:
+- Renda mensal bruta: ${simulation.income}
+- Custos fixos essenciais: ${simulation.expenses}
+- Dívidas e parcelas mensais: ${simulation.debts}
+- Meta: ${simulation.goalName}
+- Custo da meta: ${simulation.goalAmount}
+- Prazo desejado: ${simulation.goalDeadline} meses
+
+Insight financeiro original:
+${JSON.stringify(insight)}
+
+Histórico da conversa:
+${conversations.length ? conversations.map(({ question: previousQuestion, answer }) => `Usuário: ${previousQuestion}\nIA: ${answer}`).join('\n\n') : 'Ainda não há perguntas anteriores.'}
+
+Nova pergunta do usuário:
+${question}
+
+Responda apenas com a resposta final, sem JSON, sem markdown e sem repetir o insight inteiro.`
 }
