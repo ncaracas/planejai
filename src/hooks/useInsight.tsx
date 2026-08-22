@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { buildAIPrompt } from '@/data/aiPrompt'
-import type { SimulationRecord } from '@/data/simulation'
+import { buildAIPrompt, buildAIQuestionPrompt } from '@/data/aiPrompt'
+import type { InsightConversation, SimulationRecord } from '@/data/simulation'
 import { useSimulationStorage } from '@/hooks/useSimulationStorage'
-import { getInsight, type InsightData } from '@/services/aiService'
+import {
+  getInsight,
+  getInsightAnswer,
+  type InsightData,
+} from '@/services/aiService'
 
 export const useInsight = (id: string) => {
   const isRequestPending = useRef(false)
@@ -21,6 +25,11 @@ export const useInsight = (id: string) => {
 
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [conversations, setConversations] = useState<InsightConversation[]>(
+    () => getFormData(id)?.conversations ?? [],
+  )
+  const [isQuestionLoading, setIsQuestionLoading] = useState(false)
+  const [questionError, setQuestionError] = useState<string | null>(null)
 
   // Necessário o uso do useCallback pois temos que colocar essa função
   // Como array de dependências do useEffect
@@ -65,5 +74,55 @@ export const useInsight = (id: string) => {
     fetchInsight(id)
   }, [id, insight, isLoading, error, fetchInsight])
 
-  return { insight, isLoading, error, fetchInsight }
+  const askQuestion = async (question: string) => {
+    const trimmedQuestion = question.trim()
+    const simulation = getFormData(id)
+
+    if (!trimmedQuestion || !simulation || !insight || isQuestionLoading) {
+      return false
+    }
+
+    setIsQuestionLoading(true)
+    setQuestionError(null)
+
+    try {
+      const prompt = buildAIQuestionPrompt(
+        simulation,
+        insight,
+        conversations,
+        trimmedQuestion,
+      )
+      const answer = await getInsightAnswer(prompt)
+      const conversation: InsightConversation = {
+        question: trimmedQuestion,
+        answer,
+        createdAt: new Date().toISOString(),
+      }
+      const nextConversations = [...conversations, conversation]
+
+      setConversations(nextConversations)
+      updateSimulation(id, {
+        ...simulation,
+        insight,
+        conversations: nextConversations,
+      } as SimulationRecord)
+      return true
+    } catch {
+      setQuestionError('Não foi possível responder agora. Tente novamente.')
+      return false
+    } finally {
+      setIsQuestionLoading(false)
+    }
+  }
+
+  return {
+    insight,
+    isLoading,
+    error,
+    fetchInsight,
+    conversations,
+    askQuestion,
+    isQuestionLoading,
+    questionError,
+  }
 }
